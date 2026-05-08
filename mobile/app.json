@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "AmbulanceTracker",
+    "slug": "ambulance-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "ambulancetracker",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#E63946"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.ambulancetracker.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Your location is used to show nearby ambulances and to share your position when on duty.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Your location is shared continuously while you are on duty as a driver."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#E63946"
+      },
+      "package": "com.ambulancetracker.app",
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow AmbulanceTracker to use your location."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
