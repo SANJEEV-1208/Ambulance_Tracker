@@ -1,19 +1,4 @@
-import { Platform } from 'react-native';
-
-// Android emulator uses 10.0.2.2 to reach host machine localhost.
-// iOS simulator can use localhost directly.
-// Physical device: replace with your machine's local IP (e.g. 192.168.1.x).
-const LOCAL_IP = '10.165.224.71'; // <-- change to your machine's IP for physical devices
-
-function getBaseUrl(): string {
-  if (__DEV__) {
-    // LOCAL_IP works for physical devices (Android + iOS) on the same network
-    return `http://${LOCAL_IP}:3000`;
-  }
-  return `https://your-production-server.com`; // replace for production
-}
-
-export const API_BASE_URL = getBaseUrl();
+export const API_BASE_URL = 'https://ambulance-tracker-wxpb.onrender.com';
 
 // Carto tiles use OSM data but allow app usage without User-Agent restrictions
 export const OSM_TILE_URL = 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
