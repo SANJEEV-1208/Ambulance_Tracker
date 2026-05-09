@@ -52,16 +52,16 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      const { token, driver } = await AuthAPI.register({
+      await AuthAPI.register({
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
         vehicle_number: vehicle_number.trim(),
         password,
       });
-      await StorageService.setToken(token);
-      await StorageService.setDriver(driver);
-      router.replace('/(driver)/dashboard');
+      Alert.alert('Success', 'Account created! Please sign in.', [
+        { text: 'OK', onPress: () => router.replace('/(driver)/login') },
+      ]);
     } catch (err: any) {
       Alert.alert('Registration Failed', err.message || 'Please try again.');
     } finally {
