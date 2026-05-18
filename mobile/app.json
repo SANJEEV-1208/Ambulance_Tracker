@@ -8,6 +8,7 @@
     "scheme": "ambulancetracker",
     "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#E63946"
     },
@@ -41,10 +42,17 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow AmbulanceTracker to use your location."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f9a621ae-3b8b-439b-930c-93c1076f1e6c"
+      }
     }
   }
 }
