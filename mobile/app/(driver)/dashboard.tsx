@@ -121,10 +121,11 @@ export default function DriverDashboard() {
   const fetchHospitals = useCallback(async (lat: number, lng: number) => {
     try {
       const query = `[out:json][timeout:25];(node["amenity"="hospital"](around:15000,${lat},${lng});way["amenity"="hospital"](around:15000,${lat},${lng}););out center;`;
+      const form = new FormData();
+      form.append('data', query);
       const response = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query)}`,
+        body: form,
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
