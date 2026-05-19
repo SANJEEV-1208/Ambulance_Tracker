@@ -224,10 +224,9 @@ export default function UserMapScreen() {
   }
 
   function handleCallDriver(phone: string) {
-    const url = `tel:${phone}`;
-    Linking.canOpenURL(url)
-      .then((ok) => { if (ok) Linking.openURL(url); else Alert.alert('Error', 'Cannot make phone calls on this device.'); })
-      .catch(() => Alert.alert('Error', 'Failed to open phone dialer.'));
+    Linking.openURL(`tel:${phone}`).catch(() =>
+      Alert.alert('Error', 'Failed to open phone dialer.')
+    );
   }
 
   async function handleChangeRole() {
