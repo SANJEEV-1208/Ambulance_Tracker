@@ -21,15 +21,10 @@ import { AuthAPI } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { StorageService } from '../../services/storage';
 import { LOCATION_UPDATE_INTERVAL_MS, OSM_TILE_URL } from '../../constants/config';
-import { getNearbyHospitals, distanceMetres } from '../../constants/hospitals';
+import { getNearbyHospitals, NearbyHospital } from '../../constants/hospitals';
 import type { Driver } from '../../types';
 
-interface Hospital {
-  id: string;
-  name: string;
-  latitude: number;
-  longitude: number;
-}
+type Hospital = NearbyHospital;
 
 const getMapHTML = (tileUrl: string) => `
 <!DOCTYPE html>
@@ -47,7 +42,7 @@ const getMapHTML = (tileUrl: string) => `
       background: #2DC653; width: 36px; height: 36px; border-radius: 50%;
       border: 2px solid white; display: flex; align-items: center; justify-content: center;
       box-shadow: 0 2px 8px rgba(45,198,83,0.5);
-      color: white; font-size: 18px; font-weight: bold; text-align: center; line-height: 32px;
+      color: white; font-size: 14px; font-weight: bold; text-align: center; line-height: 34px;
     }
     .driver-dot {
       background: #4285F4; width: 16px; height: 16px; border-radius: 50%;
@@ -64,17 +59,16 @@ const getMapHTML = (tileUrl: string) => `
   var hospitalMarkers = {};
   var driverMarker = null;
 
-  var hospitalIcon = L.divIcon({
-    className: '',
-    html: '<div class="hospital-marker">H</div>',
-    iconSize: [36, 36], iconAnchor: [18, 36]
-  });
-
   function updateHospitals(list) {
     Object.values(hospitalMarkers).forEach(function(m) { map.removeLayer(m); });
     hospitalMarkers = {};
-    list.forEach(function(h) {
-      var m = L.marker([h.latitude, h.longitude], { icon: hospitalIcon });
+    list.forEach(function(h, index) {
+      var icon = L.divIcon({
+        className: '',
+        html: '<div class="hospital-marker">' + (index + 1) + '</div>',
+        iconSize: [36, 36], iconAnchor: [18, 18]
+      });
+      var m = L.marker([h.latitude, h.longitude], { icon: icon });
       m.on('click', function() {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hospitalClick', id: h.id }));
       });
@@ -114,6 +108,7 @@ export default function DriverDashboard() {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [showList, setShowList] = useState(false);
 
   const injectHospitals = useCallback((list: Hospital[]) => {
     webViewRef.current?.injectJavaScript(`updateHospitals(${JSON.stringify(list)}); true;`);
@@ -330,6 +325,13 @@ export default function DriverDashboard() {
         <Ionicons name="locate" size={22} color="#1D3557" />
       </TouchableOpacity>
 
+      {/* Hospital list button */}
+      {hospitals.length > 0 && (
+        <TouchableOpacity style={styles.listBtn} onPress={() => setShowList(true)}>
+          <Ionicons name="list" size={22} color="#1D3557" />
+        </TouchableOpacity>
+      )}
+
       {/* Hospital bottom sheet */}
       <Modal
         visible={!!selectedHospital}
@@ -353,22 +355,53 @@ export default function DriverDashboard() {
                 <Ionicons name="close-circle" size={28} color="#ADB5BD" />
               </TouchableOpacity>
             </View>
-            {locationRef.current && (() => {
-              const dist = distanceMetres(locationRef.current!.lat, locationRef.current!.lng, selectedHospital.latitude, selectedHospital.longitude);
-              const label = dist < 1000 ? `${Math.round(dist)} m away` : `${(dist / 1000).toFixed(1)} km away`;
-              return (
-                <View style={styles.sheetRow}>
-                  <Ionicons name="navigate" size={16} color="#457B9D" />
-                  <Text style={styles.sheetDetail}>{label}</Text>
-                </View>
-              );
-            })()}
+            <View style={styles.sheetRow}>
+              <Ionicons name="navigate" size={16} color="#457B9D" />
+              <Text style={styles.sheetDetail}>
+                {selectedHospital.distance_metres < 1000
+                  ? `${selectedHospital.distance_metres} m away`
+                  : `${(selectedHospital.distance_metres / 1000).toFixed(1)} km away`}
+              </Text>
+            </View>
             <TouchableOpacity style={styles.navigateBtn} onPress={() => handleNavigate(selectedHospital)}>
               <Ionicons name="navigate" size={22} color="#fff" />
               <Text style={styles.navigateBtnText}>Navigate</Text>
             </TouchableOpacity>
           </View>
         )}
+      </Modal>
+
+      {/* Hospital list modal */}
+      <Modal visible={showList} transparent animationType="slide" onRequestClose={() => setShowList(false)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowList(false)} />
+        <View style={styles.listSheet}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.profileTitle}>Nearby Hospitals</Text>
+          <Text style={styles.listSubtitle}>Sorted by distance from your location</Text>
+          {hospitals.map((h, index) => {
+            const label = h.distance_metres < 1000
+              ? `${h.distance_metres} m`
+              : `${(h.distance_metres / 1000).toFixed(1)} km`;
+            return (
+              <TouchableOpacity
+                key={h.id}
+                style={styles.listItem}
+                onPress={() => { setShowList(false); setSelectedHospital(h); }}
+              >
+                <View style={styles.listRank}>
+                  <Text style={styles.listRankText}>{index + 1}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.listName}>{h.name}</Text>
+                  <Text style={styles.listDist}>{label} away</Text>
+                </View>
+                <TouchableOpacity onPress={() => handleNavigate(h)}>
+                  <Ionicons name="navigate" size={22} color="#2DC653" />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </Modal>
 
       {/* Profile bottom sheet */}
@@ -503,4 +536,25 @@ const styles = StyleSheet.create({
     gap: 6, paddingVertical: 10, marginTop: 4,
   },
   switchRoleText: { fontSize: 14, color: '#457B9D' },
+  listBtn: {
+    position: 'absolute', bottom: 90, right: 16, backgroundColor: '#fff',
+    width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, elevation: 5,
+  },
+  listSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, paddingBottom: 40, maxHeight: '80%',
+  },
+  listSubtitle: { fontSize: 12, color: '#457B9D', marginBottom: 16, marginTop: -8 },
+  listItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1FAEE',
+  },
+  listRank: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: '#2DC653',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  listRankText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  listName: { fontSize: 14, fontWeight: '600', color: '#1D3557' },
+  listDist: { fontSize: 12, color: '#457B9D', marginTop: 2 },
 });

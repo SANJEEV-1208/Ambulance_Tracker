@@ -34,8 +34,13 @@ export function distanceMetres(lat1: number, lng1: number, lat2: number, lng2: n
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function getNearbyHospitals(lat: number, lng: number, radiusMetres = 15000): StaticHospital[] {
-  return STATIC_HOSPITALS.filter(
-    (h) => distanceMetres(lat, lng, h.latitude, h.longitude) <= radiusMetres
-  );
+export interface NearbyHospital extends StaticHospital {
+  distance_metres: number;
+}
+
+export function getNearbyHospitals(lat: number, lng: number, radiusMetres = 15000): NearbyHospital[] {
+  return STATIC_HOSPITALS
+    .map((h) => ({ ...h, distance_metres: Math.round(distanceMetres(lat, lng, h.latitude, h.longitude)) }))
+    .filter((h) => h.distance_metres <= radiusMetres)
+    .sort((a, b) => a.distance_metres - b.distance_metres);
 }
