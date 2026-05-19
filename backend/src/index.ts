@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 
 import authRouter from './routes/auth';
 import ambulancesRouter from './routes/ambulances';
+import hospitalsRouter from './routes/hospitals';
 import { setupSocketHandlers } from './socket/handlers';
 import { testConnection } from './db';
 
@@ -27,6 +28,7 @@ app.use(express.json());
 // ── REST routes ─────────────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
 app.use('/api/ambulances', ambulancesRouter);
+app.use('/api/hospitals', hospitalsRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

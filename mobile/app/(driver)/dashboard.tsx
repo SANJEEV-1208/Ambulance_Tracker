@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthAPI } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { StorageService } from '../../services/storage';
-import { LOCATION_UPDATE_INTERVAL_MS, OSM_TILE_URL } from '../../constants/config';
+import { LOCATION_UPDATE_INTERVAL_MS, OSM_TILE_URL, API_BASE_URL } from '../../constants/config';
 import type { Driver } from '../../types';
 
 interface Hospital {
@@ -120,23 +120,10 @@ export default function DriverDashboard() {
 
   const fetchHospitals = useCallback(async (lat: number, lng: number) => {
     try {
-      const query = `[out:json][timeout:25];(node["amenity"="hospital"](around:15000,${lat},${lng});way["amenity"="hospital"](around:15000,${lat},${lng}););out center;`;
-      const form = new FormData();
-      form.append('data', query);
-      const response = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: form,
-      });
+      const response = await fetch(`${API_BASE_URL}/api/hospitals/nearby?lat=${lat}&lng=${lng}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      const list: Hospital[] = (data.elements as any[])
-        .map((el) => {
-          const elLat = el.lat ?? el.center?.lat;
-          const elLng = el.lon ?? el.center?.lon;
-          if (!elLat || !elLng) return null;
-          return { id: String(el.id), name: el.tags?.name || 'Hospital', latitude: elLat, longitude: elLng };
-        })
-        .filter(Boolean) as Hospital[];
+      const list: Hospital[] = data.hospitals;
       setHospitals(list);
       hospitalsRef.current = list;
       injectHospitals(list);
