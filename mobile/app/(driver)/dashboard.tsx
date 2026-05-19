@@ -20,7 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthAPI } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { StorageService } from '../../services/storage';
-import { LOCATION_UPDATE_INTERVAL_MS, OSM_TILE_URL, API_BASE_URL } from '../../constants/config';
+import { LOCATION_UPDATE_INTERVAL_MS, OSM_TILE_URL } from '../../constants/config';
+import { getNearbyHospitals } from '../../constants/hospitals';
 import type { Driver } from '../../types';
 
 interface Hospital {
@@ -118,18 +119,11 @@ export default function DriverDashboard() {
     webViewRef.current?.injectJavaScript(`updateHospitals(${JSON.stringify(list)}); true;`);
   }, []);
 
-  const fetchHospitals = useCallback(async (lat: number, lng: number) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/hospitals/nearby?lat=${lat}&lng=${lng}`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      const list: Hospital[] = data.hospitals;
-      setHospitals(list);
-      hospitalsRef.current = list;
-      injectHospitals(list);
-    } catch (err) {
-      console.warn('Failed to fetch hospitals:', err);
-    }
+  const fetchHospitals = useCallback((lat: number, lng: number) => {
+    const list = getNearbyHospitals(lat, lng);
+    setHospitals(list);
+    hospitalsRef.current = list;
+    injectHospitals(list);
   }, [injectHospitals]);
 
   useEffect(() => {
