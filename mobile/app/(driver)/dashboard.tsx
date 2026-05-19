@@ -21,7 +21,7 @@ import { AuthAPI } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { StorageService } from '../../services/storage';
 import { LOCATION_UPDATE_INTERVAL_MS, OSM_TILE_URL } from '../../constants/config';
-import { getNearbyHospitals } from '../../constants/hospitals';
+import { getNearbyHospitals, distanceMetres } from '../../constants/hospitals';
 import type { Driver } from '../../types';
 
 interface Hospital {
@@ -353,6 +353,16 @@ export default function DriverDashboard() {
                 <Ionicons name="close-circle" size={28} color="#ADB5BD" />
               </TouchableOpacity>
             </View>
+            {locationRef.current && (() => {
+              const dist = distanceMetres(locationRef.current!.lat, locationRef.current!.lng, selectedHospital.latitude, selectedHospital.longitude);
+              const label = dist < 1000 ? `${Math.round(dist)} m away` : `${(dist / 1000).toFixed(1)} km away`;
+              return (
+                <View style={styles.sheetRow}>
+                  <Ionicons name="navigate" size={16} color="#457B9D" />
+                  <Text style={styles.sheetDetail}>{label}</Text>
+                </View>
+              );
+            })()}
             <TouchableOpacity style={styles.navigateBtn} onPress={() => handleNavigate(selectedHospital)}>
               <Ionicons name="navigate" size={22} color="#fff" />
               <Text style={styles.navigateBtnText}>Navigate</Text>
@@ -470,6 +480,8 @@ const styles = StyleSheet.create({
   },
   sheetName: { fontSize: 18, fontWeight: '700', color: '#1D3557' },
   sheetSub: { fontSize: 13, color: '#457B9D', marginTop: 2 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  sheetDetail: { fontSize: 15, color: '#1D3557' },
   navigateBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#2DC653', borderRadius: 14, paddingVertical: 16, marginTop: 12, gap: 10,
