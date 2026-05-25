@@ -10,7 +10,6 @@ import {
   Switch,
   SafeAreaView,
   Platform,
-  Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -54,6 +53,10 @@ const getMapHTML = (tileUrl: string) => `
       background: #4285F4; width: 16px; height: 16px; border-radius: 50%;
       border: 3px solid white; box-shadow: 0 2px 6px rgba(66,133,244,0.5);
     }
+    @keyframes sosPulse { 0%{transform:scale(1);opacity:0.8} 100%{transform:scale(2.4);opacity:0} }
+    .sos-pulse { position:absolute; width:36px; height:36px; border-radius:50%; background:rgba(230,57,70,0.4); animation:sosPulse 1.2s ease-out infinite; }
+    .sos-core { background:#E63946; color:#fff; font-size:9px; font-weight:900; width:26px; height:26px; border-radius:50%; border:2px solid white; display:flex; align-items:center; justify-content:center; z-index:1; }
+    .sos-wrap { position:relative; width:36px; height:36px; display:flex; align-items:center; justify-content:center; }
   </style>
 </head>
 <body>
@@ -103,6 +106,21 @@ const getMapHTML = (tileUrl: string) => `
   function panToDriver() {
     if (driverMarker) map.setView(driverMarker.getLatLng(), 14);
   }
+
+  var sosMarker = null;
+  function addSosMarker(lat, lng) {
+    if (sosMarker) map.removeLayer(sosMarker);
+    var icon = L.divIcon({
+      className: '',
+      html: '<div class="sos-wrap"><div class="sos-pulse"></div><div class="sos-core">SOS</div></div>',
+      iconSize: [36, 36], iconAnchor: [18, 18]
+    });
+    sosMarker = L.marker([lat, lng], { icon: icon }).addTo(map);
+    sosMarker.bindTooltip('Emergency SOS Location', { permanent: true, direction: 'top' });
+  }
+  function clearSosMarker() {
+    if (sosMarker) { map.removeLayer(sosMarker); sosMarker = null; }
+  }
 </script>
 </body>
 </html>
@@ -129,6 +147,7 @@ export default function DriverDashboard() {
   const [showProfile, setShowProfile] = useState(false);
   const [showList, setShowList] = useState(false);
   const [sosAlert, setSosAlert] = useState<{ latitude: number; longitude: number; timestamp: string } | null>(null);
+  const [sosNavigating, setSosNavigating] = useState(false);
 
   const injectHospitals = useCallback((list: Hospital[]) => {
     webViewRef.current?.injectJavaScript(`updateHospitals(${JSON.stringify(list)}); true;`);
@@ -217,6 +236,7 @@ export default function DriverDashboard() {
       const socket = socketService.get();
       socket?.on('sos:alert', (data: { latitude: number; longitude: number; timestamp: string }) => {
         setSosAlert(data);
+        webViewRef.current?.injectJavaScript(`addSosMarker(${data.latitude}, ${data.longitude}); true;`);
       });
     })();
 
@@ -348,10 +368,31 @@ export default function DriverDashboard() {
   }
 
   function handleStopNavigation() {
-    webViewRef.current?.injectJavaScript('clearRoute(); true;');
+    webViewRef.current?.injectJavaScript('clearRoute(); clearSosMarker(); true;');
     setIsNavigating(false);
     setRouteCoords(null);
     setHospitalRoute(null);
+  }
+
+  async function handleSosNavigate() {
+    if (!sosAlert || !locationRef.current) return;
+    setSosNavigating(true);
+    try {
+      const { lat, lng } = locationRef.current;
+      const res = await fetch(
+        `${API_BASE_URL}/api/route?fromLat=${lat}&fromLng=${lng}&toLat=${sosAlert.latitude}&toLng=${sosAlert.longitude}`
+      );
+      const data = await res.json();
+      if (!data.coordinates?.length) throw new Error('No route');
+      const latlngs = data.coordinates.map((c: number[]) => [c[1], c[0]]);
+      webViewRef.current?.injectJavaScript(`drawRoute(${JSON.stringify(latlngs)}); true;`);
+      setSosAlert(null);
+      setIsNavigating(true);
+    } catch {
+      Alert.alert('Route unavailable', 'Could not fetch route. Check your internet connection.');
+    } finally {
+      setSosNavigating(false);
+    }
   }
 
   if (loading) {
@@ -449,17 +490,16 @@ export default function DriverDashboard() {
               </Text>
             )}
             <TouchableOpacity
-              style={styles.sosNavigateBtn}
-              onPress={() => {
-                if (sosAlert) {
-                  Linking.openURL(
-                    `https://www.google.com/maps/dir/?api=1&destination=${sosAlert.latitude},${sosAlert.longitude}&travelmode=driving`
-                  );
-                }
-              }}
+              style={[styles.sosNavigateBtn, sosNavigating && { opacity: 0.7 }]}
+              onPress={handleSosNavigate}
+              disabled={sosNavigating}
             >
-              <Ionicons name="navigate" size={20} color="#fff" />
-              <Text style={styles.sosNavigateText}>Navigate to User</Text>
+              {sosNavigating
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Ionicons name="navigate" size={20} color="#fff" />}
+              <Text style={styles.sosNavigateText}>
+                {sosNavigating ? 'Getting Route…' : 'Navigate to User'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.sosDismissBtn} onPress={() => setSosAlert(null)}>
               <Text style={styles.sosDismissText}>Dismiss</Text>
