@@ -118,6 +118,7 @@ export default function UserMapScreen() {
   const [fetchingAmbulances, setFetchingAmbulances] = useState(false);
   const [sosSent, setSosSent] = useState(false);
   const [ambulanceRoute, setAmbulanceRoute] = useState<{ distance_metres: number; duration_seconds: number } | null>(null);
+  const [sosAcceptedInfo, setSosAcceptedInfo] = useState<{ name: string; phone: string; vehicle_number: string } | null>(null);
 
   const injectAmbulances = useCallback((ambs: Map<string, Ambulance>) => {
     const list = Array.from(ambs.values()).filter((a) => a.latitude !== 0 && a.longitude !== 0);
@@ -205,10 +206,16 @@ export default function UserMapScreen() {
       });
     });
 
+    socket.on('sos:accepted', (data: { driver: { name: string; phone: string; vehicle_number: string } }) => {
+      setSosSent(false);
+      setSosAcceptedInfo(data.driver);
+    });
+
     return () => {
       socket.off('ambulance:location_updated');
       socket.off('ambulance:on_duty');
       socket.off('ambulance:off_duty');
+      socket.off('sos:accepted');
       socketService.disconnect();
     };
   }, [injectAmbulances]);
@@ -376,6 +383,36 @@ export default function UserMapScreen() {
         </View>
       )}
 
+      <Modal visible={!!sosAcceptedInfo} transparent animationType="fade" onRequestClose={() => setSosAcceptedInfo(null)}>
+        <View style={styles.acceptedOverlay}>
+          <View style={styles.acceptedCard}>
+            <View style={styles.acceptedIconRow}>
+              <Ionicons name="checkmark-circle" size={52} color="#2DC653" />
+            </View>
+            <Text style={styles.acceptedTitle}>Help is on the way!</Text>
+            <Text style={styles.acceptedSub}>An ambulance driver accepted your SOS alert</Text>
+            {sosAcceptedInfo && (
+              <>
+                <View style={styles.acceptedDriverBox}>
+                  <Text style={styles.acceptedDriverName}>{sosAcceptedInfo.name}</Text>
+                  <Text style={styles.acceptedVehicle}>{sosAcceptedInfo.vehicle_number}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.acceptedCallBtn}
+                  onPress={() => Linking.openURL(`tel:${sosAcceptedInfo.phone}`).catch(() => {})}
+                >
+                  <Ionicons name="call" size={18} color="#fff" />
+                  <Text style={styles.acceptedCallText}>Call Driver</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity style={styles.acceptedOkBtn} onPress={() => setSosAcceptedInfo(null)}>
+              <Text style={styles.acceptedOkText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={!!selectedAmbulance} transparent animationType="slide" onRequestClose={dismissAmbulance}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={dismissAmbulance} />
         {selectedAmbulance && (
@@ -491,6 +528,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFBEB', borderRadius: 8, padding: 8, marginBottom: 10,
   },
   inactiveText: { flex: 1, fontSize: 12, color: '#92400E' },
+  acceptedOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  acceptedCard: {
+    backgroundColor: '#fff', borderRadius: 24, padding: 28,
+    width: '100%', alignItems: 'center',
+    borderWidth: 3, borderColor: '#2DC653',
+  },
+  acceptedIconRow: {
+    width: 80, height: 80, borderRadius: 40, backgroundColor: '#F0FDF4',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
+  },
+  acceptedTitle: { fontSize: 24, fontWeight: '900', color: '#1D3557', marginBottom: 8 },
+  acceptedSub: { fontSize: 14, color: '#457B9D', textAlign: 'center', marginBottom: 20 },
+  acceptedDriverBox: {
+    backgroundColor: '#F0FDF4', borderRadius: 14, padding: 16,
+    width: '100%', alignItems: 'center', marginBottom: 16,
+  },
+  acceptedDriverName: { fontSize: 20, fontWeight: '800', color: '#1D3557', marginBottom: 4 },
+  acceptedVehicle: { fontSize: 14, color: '#457B9D', fontWeight: '600' },
+  acceptedCallBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#2DC653', borderRadius: 14, paddingVertical: 14,
+    width: '100%', gap: 10, marginBottom: 10,
+  },
+  acceptedCallText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  acceptedOkBtn: { paddingVertical: 10 },
+  acceptedOkText: { fontSize: 15, color: '#ADB5BD', fontWeight: '600' },
   sosBtn: {
     position: 'absolute', bottom: 32, left: 16,
     backgroundColor: '#E63946', width: 64, height: 64, borderRadius: 32,

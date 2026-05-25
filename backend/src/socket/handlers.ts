@@ -6,6 +6,8 @@ interface DriverSocket extends Socket {
   driverId?: string;
 }
 
+const acceptedSos = new Map<string, boolean>();
+
 export function setupSocketHandlers(io: Server): void {
   // Middleware: authenticate drivers, allow users through unauthenticated
   io.use((socket: DriverSocket, next) => {
@@ -95,12 +97,32 @@ export function setupSocketHandlers(io: Server): void {
     socket.on('user:sos', (data: { latitude: number; longitude: number }) => {
       const { latitude, longitude } = data;
       if (typeof latitude !== 'number' || typeof longitude !== 'number') return;
-      console.log(`[socket] SOS received from ${socket.id} at ${latitude},${longitude}`);
-      socket.broadcast.emit('sos:alert', {
-        latitude,
-        longitude,
-        timestamp: new Date().toISOString(),
-      });
+      const sosId = `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      console.log(`[socket] SOS from ${socket.id} at ${latitude},${longitude} id=${sosId}`);
+      socket.broadcast.emit('sos:alert', { sosId, latitude, longitude, timestamp: new Date().toISOString() });
+    });
+
+    // Driver accepts SOS — only the first acceptance wins
+    socket.on('sos:accept', async (data: { sosId: string }) => {
+      if (!socket.driverId || !data.sosId) return;
+      if (acceptedSos.has(data.sosId)) return;
+      acceptedSos.set(data.sosId, true);
+      setTimeout(() => acceptedSos.delete(data.sosId), 600000);
+      try {
+        const result = await pool.query(
+          'SELECT name, phone, vehicle_number FROM drivers WHERE id = $1',
+          [socket.driverId]
+        );
+        if (result.rows[0]) {
+          io.emit('sos:accepted', {
+            sosId: data.sosId,
+            driverId: socket.driverId,
+            driver: result.rows[0],
+          });
+        }
+      } catch (err) {
+        console.error('[socket] sos:accept error:', err);
+      }
     });
 
     // Driver disconnects (app closed / network lost) → auto off-duty

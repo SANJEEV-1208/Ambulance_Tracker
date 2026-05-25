@@ -133,6 +133,8 @@ export default function DriverDashboard() {
   const mapReadyRef = useRef(false);
   const hospitalsRef = useRef<Hospital[]>([]);
   const locationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingSosRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const driverIdRef = useRef<string | null>(null);
 
   const [driver, setDriver] = useState<Driver | null>(null);
   const [isOnDuty, setIsOnDuty] = useState(false);
@@ -146,7 +148,7 @@ export default function DriverDashboard() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showList, setShowList] = useState(false);
-  const [sosAlert, setSosAlert] = useState<{ latitude: number; longitude: number; timestamp: string } | null>(null);
+  const [sosAlert, setSosAlert] = useState<{ sosId: string; latitude: number; longitude: number; timestamp: string } | null>(null);
   const [sosNavigating, setSosNavigating] = useState(false);
 
   const injectHospitals = useCallback((list: Hospital[]) => {
@@ -202,9 +204,10 @@ export default function DriverDashboard() {
     (async () => {
       try {
         const cached = await StorageService.getDriver();
-        if (cached) setDriver(cached);
+        if (cached) { setDriver(cached); driverIdRef.current = cached.id; }
         const { driver: fresh } = await AuthAPI.me();
         setDriver(fresh);
+        driverIdRef.current = fresh.id;
         await StorageService.setDriver(fresh);
         setIsOnDuty(fresh.is_on_duty);
       } catch (err: any) {
@@ -234,15 +237,31 @@ export default function DriverDashboard() {
       }
 
       const socket = socketService.get();
-      socket?.on('sos:alert', (data: { latitude: number; longitude: number; timestamp: string }) => {
+      socket?.on('sos:alert', (data: { sosId: string; latitude: number; longitude: number; timestamp: string }) => {
         setSosAlert(data);
         webViewRef.current?.injectJavaScript(`addSosMarker(${data.latitude}, ${data.longitude}); true;`);
+      });
+
+      socket?.on('sos:accepted', (data: { sosId: string; driverId: string }) => {
+        const isMe = pendingSosRef.current !== null && data.driverId === driverIdRef.current;
+        if (isMe) {
+          const { latitude, longitude } = pendingSosRef.current!;
+          pendingSosRef.current = null;
+          setSosAlert(null);
+          handleSosNavigate(latitude, longitude);
+        } else {
+          pendingSosRef.current = null;
+          setSosAlert(null);
+          setSosNavigating(false);
+          webViewRef.current?.injectJavaScript('clearSosMarker(); true;');
+        }
       });
     })();
 
     return () => {
       stopLocationSharing();
       socketService.get()?.off('sos:alert');
+      socketService.get()?.off('sos:accepted');
       socketService.disconnect();
     };
   }, []);
@@ -374,19 +393,18 @@ export default function DriverDashboard() {
     setHospitalRoute(null);
   }
 
-  async function handleSosNavigate() {
-    if (!sosAlert || !locationRef.current) return;
+  async function handleSosNavigate(toLat: number, toLng: number) {
+    if (!locationRef.current) return;
     setSosNavigating(true);
     try {
       const { lat, lng } = locationRef.current;
       const res = await fetch(
-        `${API_BASE_URL}/api/route?fromLat=${lat}&fromLng=${lng}&toLat=${sosAlert.latitude}&toLng=${sosAlert.longitude}`
+        `${API_BASE_URL}/api/route?fromLat=${lat}&fromLng=${lng}&toLat=${toLat}&toLng=${toLng}`
       );
       const data = await res.json();
       if (!data.coordinates?.length) throw new Error('No route');
       const latlngs = data.coordinates.map((c: number[]) => [c[1], c[0]]);
       webViewRef.current?.injectJavaScript(`drawRoute(${JSON.stringify(latlngs)}); true;`);
-      setSosAlert(null);
       setIsNavigating(true);
     } catch {
       Alert.alert('Route unavailable', 'Could not fetch route. Check your internet connection.');
@@ -490,19 +508,25 @@ export default function DriverDashboard() {
               </Text>
             )}
             <TouchableOpacity
-              style={[styles.sosNavigateBtn, sosNavigating && { opacity: 0.7 }]}
-              onPress={handleSosNavigate}
+              style={[styles.sosAcceptBtn, sosNavigating && { opacity: 0.7 }]}
+              onPress={() => {
+                if (sosAlert) {
+                  pendingSosRef.current = { latitude: sosAlert.latitude, longitude: sosAlert.longitude };
+                  socketService.get()?.emit('sos:accept', { sosId: sosAlert.sosId });
+                  setSosNavigating(true);
+                }
+              }}
               disabled={sosNavigating}
             >
               {sosNavigating
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Ionicons name="navigate" size={20} color="#fff" />}
+                : <Ionicons name="checkmark-circle" size={20} color="#fff" />}
               <Text style={styles.sosNavigateText}>
-                {sosNavigating ? 'Getting Route…' : 'Navigate to User'}
+                {sosNavigating ? 'Accepting…' : 'Accept & Navigate'}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.sosDismissBtn} onPress={() => setSosAlert(null)}>
-              <Text style={styles.sosDismissText}>Dismiss</Text>
+            <TouchableOpacity style={styles.sosDismissBtn} onPress={() => setSosAlert(null)} disabled={sosNavigating}>
+              <Text style={styles.sosDismissText}>Deny</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -744,6 +768,11 @@ const styles = StyleSheet.create({
   sosTitle: { fontSize: 26, fontWeight: '900', color: '#E63946', letterSpacing: 2, marginBottom: 8 },
   sosSubtitle: { fontSize: 15, color: '#1D3557', textAlign: 'center', marginBottom: 12 },
   sosCoords: { fontSize: 13, color: '#457B9D', marginBottom: 24 },
+  sosAcceptBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#2DC653', borderRadius: 14, paddingVertical: 16,
+    width: '100%', gap: 10, marginBottom: 12,
+  },
   sosNavigateBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#E63946', borderRadius: 14, paddingVertical: 16,
