@@ -117,6 +117,7 @@ export default function UserMapScreen() {
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [fetchingAmbulances, setFetchingAmbulances] = useState(false);
   const [sosSent, setSosSent] = useState(false);
+  const [ambulanceRoute, setAmbulanceRoute] = useState<{ distance_metres: number; duration_seconds: number } | null>(null);
 
   const injectAmbulances = useCallback((ambs: Map<string, Ambulance>) => {
     const list = Array.from(ambs.values()).filter((a) => a.latitude !== 0 && a.longitude !== 0);
@@ -238,6 +239,7 @@ export default function UserMapScreen() {
 
   function dismissAmbulance() {
     setSelectedAmbulance(null);
+    setAmbulanceRoute(null);
     webViewRef.current?.injectJavaScript('clearRoute(); true;');
   }
 
@@ -307,6 +309,9 @@ export default function UserMapScreen() {
       const data = await res.json();
       const latlngs = data.coordinates.map((c: number[]) => [c[1], c[0]]);
       webViewRef.current?.injectJavaScript(`drawRoute(${JSON.stringify(latlngs)}); true;`);
+      if (data.distance_metres) {
+        setAmbulanceRoute({ distance_metres: data.distance_metres, duration_seconds: data.duration_seconds });
+      }
     } catch (_) {}
   }
 
@@ -391,8 +396,16 @@ export default function UserMapScreen() {
 
             <View style={styles.sheetRow}>
               <Ionicons name="navigate" size={16} color="#457B9D" />
-              <Text style={styles.sheetDetail}>{formatDistance(selectedAmbulance.distance_meters)} away</Text>
-              <Text style={styles.etaText}>{formatETA(selectedAmbulance.distance_meters)}</Text>
+              <Text style={styles.sheetDetail}>
+                {ambulanceRoute
+                  ? `${ambulanceRoute.distance_metres < 1000 ? ambulanceRoute.distance_metres + ' m' : (ambulanceRoute.distance_metres / 1000).toFixed(1) + ' km'} by road`
+                  : `${formatDistance(selectedAmbulance.distance_meters)} away`}
+              </Text>
+              <Text style={styles.etaText}>
+                {ambulanceRoute
+                  ? `~${Math.ceil(ambulanceRoute.duration_seconds / 60)} min`
+                  : formatETA(selectedAmbulance.distance_meters)}
+              </Text>
             </View>
 
             {selectedAmbulance.last_seen && minutesSince(selectedAmbulance.last_seen) > 2 && (

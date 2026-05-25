@@ -113,6 +113,8 @@ export default function DriverDashboard() {
   const [toggling, setToggling] = useState(false);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
+  const [hospitalRoute, setHospitalRoute] = useState<{ distance_metres: number; duration_seconds: number } | null>(null);
+  const [fetchingRoute, setFetchingRoute] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showList, setShowList] = useState(false);
   const [sosAlert, setSosAlert] = useState<{ latitude: number; longitude: number; timestamp: string } | null>(null);
@@ -301,7 +303,21 @@ export default function DriverDashboard() {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'hospitalClick') {
         const h = hospitalsRef.current.find((x) => x.id === data.id);
-        if (h) setSelectedHospital(h);
+        if (h) {
+          setSelectedHospital(h);
+          setHospitalRoute(null);
+          if (locationRef.current) {
+            const { lat, lng } = locationRef.current;
+            setFetchingRoute(true);
+            fetch(`${API_BASE_URL}/api/route?fromLat=${lat}&fromLng=${lng}&toLat=${h.latitude}&toLng=${h.longitude}`)
+              .then((r) => r.json())
+              .then((d) => {
+                if (d.distance_metres) setHospitalRoute({ distance_metres: d.distance_metres, duration_seconds: d.duration_seconds });
+              })
+              .catch(() => {})
+              .finally(() => setFetchingRoute(false));
+          }
+        }
       }
     } catch (_) {}
   }
@@ -442,11 +458,26 @@ export default function DriverDashboard() {
             </View>
             <View style={styles.sheetRow}>
               <Ionicons name="navigate" size={16} color="#457B9D" />
-              <Text style={styles.sheetDetail}>
-                {selectedHospital.distance_metres < 1000
-                  ? `${selectedHospital.distance_metres} m away`
-                  : `${(selectedHospital.distance_metres / 1000).toFixed(1)} km away`}
-              </Text>
+              {fetchingRoute ? (
+                <ActivityIndicator size="small" color="#457B9D" style={{ marginLeft: 4 }} />
+              ) : hospitalRoute ? (
+                <>
+                  <Text style={styles.sheetDetail}>
+                    {hospitalRoute.distance_metres < 1000
+                      ? `${hospitalRoute.distance_metres} m`
+                      : `${(hospitalRoute.distance_metres / 1000).toFixed(1)} km`} by road
+                  </Text>
+                  <Text style={styles.etaChip}>
+                    ~{Math.ceil(hospitalRoute.duration_seconds / 60)} min
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.sheetDetail}>
+                  {selectedHospital.distance_metres < 1000
+                    ? `${selectedHospital.distance_metres} m`
+                    : `${(selectedHospital.distance_metres / 1000).toFixed(1)} km`} (straight-line)
+                </Text>
+              )}
             </View>
             <TouchableOpacity style={styles.navigateBtn} onPress={() => handleNavigate(selectedHospital)}>
               <Ionicons name="navigate" size={22} color="#fff" />
@@ -600,6 +631,7 @@ const styles = StyleSheet.create({
   sheetSub: { fontSize: 13, color: '#457B9D', marginTop: 2 },
   sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   sheetDetail: { fontSize: 15, color: '#1D3557' },
+  etaChip: { marginLeft: 'auto' as any, fontSize: 13, fontWeight: '700', color: '#2DC653' },
   navigateBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#2DC653', borderRadius: 14, paddingVertical: 16, marginTop: 12, gap: 10,

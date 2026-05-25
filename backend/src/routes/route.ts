@@ -29,8 +29,11 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
 
-    // coordinates are [lng, lat] — client converts to [lat, lng] for Leaflet
-    res.json({ coordinates: data.routes[0].geometry.coordinates });
+    res.json({
+      coordinates: data.routes[0].geometry.coordinates,
+      distance_metres: Math.round(data.routes[0].distance),
+      duration_seconds: Math.round(data.routes[0].duration),
+    });
   } catch (err) {
     console.error('Route fetch error:', err);
     res.status(502).json({ error: 'Could not fetch route' });
