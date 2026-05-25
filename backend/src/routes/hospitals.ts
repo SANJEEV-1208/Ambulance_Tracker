@@ -3,7 +3,7 @@ import { Router, Request, Response } from 'express';
 const router = Router();
 
 // GET /api/hospitals/nearby?lat=&lng=
-// Proxies to Overpass API — avoids React Native fetch 406 issues
+// Uses Nominatim (OpenStreetMap) — free, no API key, works globally
 router.get('/nearby', async (req: Request, res: Response) => {
   const lat = parseFloat(req.query.lat as string);
   const lng = parseFloat(req.query.lng as string);
@@ -13,44 +13,40 @@ router.get('/nearby', async (req: Request, res: Response) => {
     return;
   }
 
-  const query = `[out:json][timeout:25];(node["amenity"="hospital"](around:15000,${lat},${lng});way["amenity"="hospital"](around:15000,${lat},${lng}););out center;`;
-  const body = `data=${encodeURIComponent(query)}`;
-  const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+  // ~15km bounding box (0.135 degrees ≈ 15km)
+  const offset = 0.135;
+  const viewbox = `${lng - offset},${lat + offset},${lng + offset},${lat - offset}`;
+  const url = `https://nominatim.openstreetmap.org/search?amenity=hospital&format=json&limit=50&viewbox=${viewbox}&bounded=1&addressdetails=0`;
 
-  const mirrors = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-  ];
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'AmbulanceTracker/1.0 (resume-project)',
+        'Accept': 'application/json',
+      },
+    });
 
-  let lastError = '';
-  for (const mirror of mirrors) {
-    try {
-      const response = await fetch(mirror, { method: 'POST', headers, body });
-      if (!response.ok) {
-        lastError = `${mirror} → HTTP ${response.status}`;
-        console.warn(lastError);
-        continue;
-      }
-      const data = await response.json() as { elements: any[] };
-      const hospitals = data.elements
-        .map((el) => {
-          const elLat = el.lat ?? el.center?.lat;
-          const elLng = el.lon ?? el.center?.lon;
-          if (!elLat || !elLng) return null;
-          return { id: String(el.id), name: (el.tags?.name as string) || 'Hospital', latitude: elLat, longitude: elLng };
-        })
-        .filter(Boolean);
-      res.json({ hospitals });
+    if (!response.ok) {
+      console.error('Nominatim error:', response.status);
+      res.status(502).json({ error: `Map data source returned ${response.status}` });
       return;
-    } catch (err) {
-      lastError = `${mirror} → ${err}`;
-      console.warn(lastError);
     }
-  }
 
-  console.error('All Overpass mirrors failed:', lastError);
-  res.status(502).json({ error: 'All map data sources unavailable' });
+    const data = await response.json() as any[];
+    const hospitals = data
+      .filter((el) => el.lat && el.lon)
+      .map((el) => ({
+        id: String(el.place_id),
+        name: el.name || el.display_name.split(',')[0] || 'Hospital',
+        latitude: parseFloat(el.lat),
+        longitude: parseFloat(el.lon),
+      }));
+
+    res.json({ hospitals });
+  } catch (err) {
+    console.error('Hospital fetch error:', err);
+    res.status(500).json({ error: 'Network error while fetching hospital data' });
+  }
 });
 
 export default router;

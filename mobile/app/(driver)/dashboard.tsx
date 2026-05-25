@@ -21,10 +21,16 @@ import { AuthAPI } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { StorageService } from '../../services/storage';
 import { LOCATION_UPDATE_INTERVAL_MS, OSM_TILE_URL } from '../../constants/config';
-import { getNearbyHospitals, NearbyHospital } from '../../constants/hospitals';
+import { API_BASE_URL } from '../../constants/config';
 import type { Driver } from '../../types';
 
-type Hospital = NearbyHospital;
+interface Hospital {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  distance_metres: number;
+}
 
 const getMapHTML = (tileUrl: string) => `
 <!DOCTYPE html>
@@ -115,11 +121,30 @@ export default function DriverDashboard() {
     webViewRef.current?.injectJavaScript(`updateHospitals(${JSON.stringify(list)}); true;`);
   }, []);
 
-  const fetchHospitals = useCallback((lat: number, lng: number) => {
-    const list = getNearbyHospitals(lat, lng);
-    setHospitals(list);
-    hospitalsRef.current = list;
-    injectHospitals(list);
+  const fetchHospitals = useCallback(async (lat: number, lng: number) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/hospitals/nearby?lat=${lat}&lng=${lng}`);
+      if (!response.ok) throw new Error(`Server error ${response.status}`);
+      const data = await response.json();
+
+      const list: Hospital[] = (data.hospitals as any[])
+        .map((h) => {
+          const dLat = ((h.latitude - lat) * Math.PI) / 180;
+          const dLng = ((h.longitude - lng) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((lat * Math.PI) / 180) * Math.cos((h.latitude * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+          const dist = Math.round(6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+          return { ...h, distance_metres: dist };
+        })
+        .sort((a, b) => a.distance_metres - b.distance_metres);
+
+      setHospitals(list);
+      hospitalsRef.current = list;
+      injectHospitals(list);
+    } catch (err: any) {
+      Alert.alert('Network Error', 'Could not load nearby hospitals. Check your connection.');
+    }
   }, [injectHospitals]);
 
   useEffect(() => {
