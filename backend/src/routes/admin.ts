@@ -40,6 +40,24 @@ router.get('/', (_req: Request, res: Response) => {
     .driver-seen.stale { color: #f59e0b; }
     .empty { padding: 32px 16px; text-align: center; color: #475569; font-size: 14px; }
     .amb-marker { background:#E63946; width:32px; height:32px; border-radius:50%; border:2px solid white; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(230,57,70,0.5); }
+    .sos-marker-wrap { position:relative; width:40px; height:40px; display:flex; align-items:center; justify-content:center; }
+    .sos-marker-pulse { position:absolute; width:40px; height:40px; border-radius:50%; background:rgba(255,50,50,0.4); animation: sosPulse 1.2s ease-out infinite; }
+    .sos-marker-core { background:#ff1a1a; color:#fff; font-size:10px; font-weight:900; width:28px; height:28px; border-radius:50%; border:2px solid white; display:flex; align-items:center; justify-content:center; letter-spacing:0.5px; box-shadow:0 2px 10px rgba(255,0,0,0.7); z-index:1; }
+    @keyframes sosPulse { 0%{transform:scale(1);opacity:0.8} 100%{transform:scale(2.2);opacity:0} }
+    .sos-section { border-top: 1px solid #334155; }
+    .sos-list-header { padding: 14px 16px 10px; font-size: 12px; font-weight: 700; color: #E63946; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #334155; display:flex; align-items:center; gap:8px; }
+    .sos-badge { background:#E63946; color:#fff; font-size:10px; font-weight:800; padding:2px 7px; border-radius:99px; }
+    #sos-list { max-height: 180px; overflow-y: auto; }
+    .sos-card { padding: 12px 16px; border-bottom: 1px solid #1a2744; cursor: pointer; transition: background 0.15s; display:flex; justify-content:space-between; align-items:center; }
+    .sos-card:hover { background: #3a1a1a; }
+    .sos-card-left { display:flex; flex-direction:column; gap:3px; }
+    .sos-card-label { font-size:13px; font-weight:700; color:#ff6b6b; }
+    .sos-card-time { font-size:11px; color:#94a3b8; }
+    .sos-card-coords { font-size:10px; color:#64748b; }
+    .sos-focus-btn { font-size:11px; background:#3b1111; color:#ff6b6b; border:1px solid #7f1d1d; border-radius:6px; padding:4px 10px; cursor:pointer; white-space:nowrap; }
+    .sos-focus-btn:hover { background:#7f1d1d; }
+    .sos-toast { position:fixed; top:70px; left:50%; transform:translateX(-50%); background:#ff1a1a; color:#fff; font-size:14px; font-weight:700; padding:12px 28px; border-radius:10px; box-shadow:0 4px 24px rgba(255,0,0,0.5); z-index:9999; display:none; animation: toastIn 0.3s ease; letter-spacing:0.5px; }
+    @keyframes toastIn { from{opacity:0;top:55px} to{opacity:1;top:70px} }
   </style>
 </head>
 <body>
@@ -58,8 +76,13 @@ router.get('/', (_req: Request, res: Response) => {
     </div>
     <div class="list-header">Active Ambulances</div>
     <div id="driver-list"><div class="empty">No ambulances on duty</div></div>
+    <div class="sos-section">
+      <div class="sos-list-header">SOS Alerts <span class="sos-badge" id="sos-badge" style="display:none">0</span></div>
+      <div id="sos-list"><div class="empty" style="padding:16px">No SOS alerts</div></div>
+    </div>
   </div>
 </div>
+<div class="sos-toast" id="sos-toast">🆘 SOS ALERT — Emergency!</div>
 <script>
   var map = L.map('map', { center: [20.5937, 78.9629], zoom: 5 });
   L.tileLayer('https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
@@ -68,6 +91,14 @@ router.get('/', (_req: Request, res: Response) => {
 
   var markers = {};
   var ambulances = {};
+  var sosAlerts = [];
+  var sosMarkers = [];
+
+  var sosIcon = L.divIcon({
+    className: '',
+    html: '<div class="sos-marker-wrap"><div class="sos-marker-pulse"></div><div class="sos-marker-core">SOS</div></div>',
+    iconSize: [40, 40], iconAnchor: [20, 20]
+  });
 
   var ambIcon = L.divIcon({
     className: '',
@@ -113,6 +144,40 @@ router.get('/', (_req: Request, res: Response) => {
     if (markers[id]) map.setView(markers[id].getLatLng(), 15);
   }
 
+  function renderSosList() {
+    var el = document.getElementById('sos-list');
+    var badge = document.getElementById('sos-badge');
+    if (!sosAlerts.length) {
+      el.innerHTML = '<div class="empty" style="padding:16px">No SOS alerts</div>';
+      badge.style.display = 'none';
+      return;
+    }
+    badge.style.display = 'inline';
+    badge.textContent = sosAlerts.length;
+    el.innerHTML = sosAlerts.slice().reverse().map(function(s, i) {
+      var idx = sosAlerts.length - 1 - i;
+      return '<div class="sos-card" onclick="focusSos(' + idx + ')">' +
+        '<div class="sos-card-left">' +
+          '<div class="sos-card-label">SOS #' + (idx + 1) + '</div>' +
+          '<div class="sos-card-time">' + new Date(s.timestamp).toLocaleTimeString() + '</div>' +
+          '<div class="sos-card-coords">' + s.latitude.toFixed(5) + ', ' + s.longitude.toFixed(5) + '</div>' +
+        '</div>' +
+        '<button class="sos-focus-btn">Focus</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function focusSos(idx) {
+    var s = sosAlerts[idx];
+    if (s) map.setView([s.latitude, s.longitude], 16);
+  }
+
+  function showSosToast() {
+    var toast = document.getElementById('sos-toast');
+    toast.style.display = 'block';
+    setTimeout(function() { toast.style.display = 'none'; }, 5000);
+  }
+
   // Initial load
   fetch('/api/ambulances/active')
     .then(function(r) { return r.json(); })
@@ -149,6 +214,17 @@ router.get('/', (_req: Request, res: Response) => {
     if (markers[d.driverId]) { map.removeLayer(markers[d.driverId]); delete markers[d.driverId]; }
     delete ambulances[d.driverId];
     renderList();
+  });
+
+  socket.on('sos:alert', function(d) {
+    sosAlerts.push(d);
+    var m = L.marker([d.latitude, d.longitude], { icon: sosIcon });
+    m.bindTooltip('SOS Alert — ' + new Date(d.timestamp).toLocaleTimeString(), { permanent: true, direction: 'top' });
+    m.addTo(map);
+    sosMarkers.push(m);
+    map.setView([d.latitude, d.longitude], 15);
+    renderSosList();
+    showSosToast();
   });
 
   // Refresh time-ago labels every 30s
