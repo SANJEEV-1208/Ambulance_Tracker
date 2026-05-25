@@ -89,6 +89,20 @@ export function setupSocketHandlers(io: Server): void {
       await goOffDuty(socket.driverId, io);
     });
 
+    // ── USER EVENTS ───────────────────────────────────────────────────────────
+
+    // User sends SOS → broadcast to all on-duty drivers
+    socket.on('user:sos', (data: { latitude: number; longitude: number }) => {
+      const { latitude, longitude } = data;
+      if (typeof latitude !== 'number' || typeof longitude !== 'number') return;
+      console.log(`[socket] SOS received from ${socket.id} at ${latitude},${longitude}`);
+      socket.broadcast.emit('sos:alert', {
+        latitude,
+        longitude,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
     // Driver disconnects (app closed / network lost) → auto off-duty
     socket.on('disconnect', async () => {
       console.log(`[socket] disconnected id=${socket.id}  role=${role}`);

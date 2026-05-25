@@ -107,6 +107,7 @@ export default function UserMapScreen() {
   const [locationGranted, setLocationGranted] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [fetchingAmbulances, setFetchingAmbulances] = useState(false);
+  const [sosSent, setSosSent] = useState(false);
 
   const injectAmbulances = useCallback((ambs: Map<string, Ambulance>) => {
     const list = Array.from(ambs.values()).filter((a) => a.latitude !== 0 && a.longitude !== 0);
@@ -223,6 +224,31 @@ export default function UserMapScreen() {
     } catch (_) {}
   }
 
+  function handleSOS() {
+    if (!locationRef.current) {
+      Alert.alert('Location unavailable', 'Your location is not available yet.');
+      return;
+    }
+    Alert.alert(
+      'Send SOS Alert',
+      'This will alert all nearby ambulance drivers with your location. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send SOS',
+          style: 'destructive',
+          onPress: () => {
+            const { lat, lng } = locationRef.current!;
+            socketService.get()?.emit('user:sos', { latitude: lat, longitude: lng });
+            setSosSent(true);
+            Alert.alert('SOS Sent', 'Emergency alert sent to nearby drivers.');
+            setTimeout(() => setSosSent(false), 10000);
+          },
+        },
+      ]
+    );
+  }
+
   function handleCallDriver(phone: string) {
     Linking.openURL(`tel:${phone}`).catch(() =>
       Alert.alert('Error', 'Failed to open phone dialer.')
@@ -276,17 +302,27 @@ export default function UserMapScreen() {
       </SafeAreaView>
 
       {locationGranted && (
-        <TouchableOpacity
-          style={styles.locateBtn}
-          onPress={async () => {
-            const loc = await Location.getCurrentPositionAsync({});
-            const { latitude, longitude } = loc.coords;
-            webViewRef.current?.injectJavaScript(`setUserLocation(${latitude}, ${longitude}); true;`);
-            fetchNearby(latitude, longitude);
-          }}
-        >
-          <Ionicons name="locate" size={22} color="#1D3557" />
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity
+            style={styles.locateBtn}
+            onPress={async () => {
+              const loc = await Location.getCurrentPositionAsync({});
+              const { latitude, longitude } = loc.coords;
+              webViewRef.current?.injectJavaScript(`setUserLocation(${latitude}, ${longitude}); true;`);
+              fetchNearby(latitude, longitude);
+            }}
+          >
+            <Ionicons name="locate" size={22} color="#1D3557" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.sosBtn, sosSent && styles.sosBtnSent]}
+            onPress={handleSOS}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.sosBtnText}>{sosSent ? 'SENT' : 'SOS'}</Text>
+          </TouchableOpacity>
+        </>
       )}
 
       {loadingLocation && (
@@ -385,4 +421,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#2DC653', borderRadius: 14, paddingVertical: 16, marginTop: 12, gap: 10,
   },
   callButtonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  sosBtn: {
+    position: 'absolute', bottom: 32, left: 16,
+    backgroundColor: '#E63946', width: 64, height: 64, borderRadius: 32,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#E63946', shadowOpacity: 0.5, shadowRadius: 12, elevation: 8,
+    borderWidth: 3, borderColor: '#fff',
+  },
+  sosBtnSent: { backgroundColor: '#6C757D', shadowColor: '#6C757D' },
+  sosBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
 });

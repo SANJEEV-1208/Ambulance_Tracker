@@ -109,6 +109,7 @@ export default function DriverDashboard() {
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showList, setShowList] = useState(false);
+  const [sosAlert, setSosAlert] = useState<{ latitude: number; longitude: number; timestamp: string } | null>(null);
 
   const injectHospitals = useCallback((list: Hospital[]) => {
     webViewRef.current?.injectJavaScript(`updateHospitals(${JSON.stringify(list)}); true;`);
@@ -155,10 +156,16 @@ export default function DriverDashboard() {
         }
         fetchHospitals(latitude, longitude);
       }
+
+      const socket = socketService.get();
+      socket?.on('sos:alert', (data: { latitude: number; longitude: number; timestamp: string }) => {
+        setSosAlert(data);
+      });
     })();
 
     return () => {
       stopLocationSharing();
+      socketService.get()?.off('sos:alert');
       socketService.disconnect();
     };
   }, []);
@@ -331,6 +338,40 @@ export default function DriverDashboard() {
           <Ionicons name="list" size={22} color="#1D3557" />
         </TouchableOpacity>
       )}
+
+      {/* SOS Alert Modal */}
+      <Modal visible={!!sosAlert} transparent animationType="fade" onRequestClose={() => setSosAlert(null)}>
+        <View style={styles.sosOverlay}>
+          <View style={styles.sosCard}>
+            <View style={styles.sosIconRow}>
+              <Ionicons name="warning" size={40} color="#E63946" />
+            </View>
+            <Text style={styles.sosTitle}>EMERGENCY SOS</Text>
+            <Text style={styles.sosSubtitle}>A nearby user needs urgent help!</Text>
+            {sosAlert && (
+              <Text style={styles.sosCoords}>
+                {sosAlert.latitude.toFixed(5)}, {sosAlert.longitude.toFixed(5)}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={styles.sosNavigateBtn}
+              onPress={() => {
+                if (sosAlert) {
+                  Linking.openURL(
+                    `https://www.google.com/maps/dir/?api=1&destination=${sosAlert.latitude},${sosAlert.longitude}&travelmode=driving`
+                  );
+                }
+              }}
+            >
+              <Ionicons name="navigate" size={20} color="#fff" />
+              <Text style={styles.sosNavigateText}>Navigate to User</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sosDismissBtn} onPress={() => setSosAlert(null)}>
+              <Text style={styles.sosDismissText}>Dismiss</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Hospital bottom sheet */}
       <Modal
@@ -536,6 +577,30 @@ const styles = StyleSheet.create({
     gap: 6, paddingVertical: 10, marginTop: 4,
   },
   switchRoleText: { fontSize: 14, color: '#457B9D' },
+  sosOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  sosCard: {
+    backgroundColor: '#fff', borderRadius: 24, padding: 28,
+    width: '100%', alignItems: 'center',
+    borderWidth: 3, borderColor: '#E63946',
+  },
+  sosIconRow: {
+    width: 72, height: 72, borderRadius: 36, backgroundColor: '#FFF0F1',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
+  },
+  sosTitle: { fontSize: 26, fontWeight: '900', color: '#E63946', letterSpacing: 2, marginBottom: 8 },
+  sosSubtitle: { fontSize: 15, color: '#1D3557', textAlign: 'center', marginBottom: 12 },
+  sosCoords: { fontSize: 13, color: '#457B9D', marginBottom: 24 },
+  sosNavigateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#E63946', borderRadius: 14, paddingVertical: 16,
+    width: '100%', gap: 10, marginBottom: 12,
+  },
+  sosNavigateText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  sosDismissBtn: { paddingVertical: 10 },
+  sosDismissText: { fontSize: 15, color: '#ADB5BD', fontWeight: '600' },
   listBtn: {
     position: 'absolute', bottom: 90, right: 16, backgroundColor: '#fff',
     width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center',
