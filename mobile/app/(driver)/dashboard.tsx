@@ -83,6 +83,15 @@ const getMapHTML = (tileUrl: string) => `
     });
   }
 
+  var routeLayer = null;
+  function drawRoute(latlngs) {
+    if (routeLayer) map.removeLayer(routeLayer);
+    routeLayer = L.polyline(latlngs, { color: '#2DC653', weight: 5, opacity: 0.85, dashArray: '10, 8' }).addTo(map);
+  }
+  function clearRoute() {
+    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  }
+
   function setDriverLocation(lat, lng) {
     if (driverMarker) map.removeLayer(driverMarker);
     driverMarker = L.marker([lat, lng], {
@@ -114,7 +123,9 @@ export default function DriverDashboard() {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
   const [hospitalRoute, setHospitalRoute] = useState<{ distance_metres: number; duration_seconds: number } | null>(null);
+  const [routeCoords, setRouteCoords] = useState<number[][] | null>(null);
   const [fetchingRoute, setFetchingRoute] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showList, setShowList] = useState(false);
   const [sosAlert, setSosAlert] = useState<{ latitude: number; longitude: number; timestamp: string } | null>(null);
@@ -312,7 +323,10 @@ export default function DriverDashboard() {
             fetch(`${API_BASE_URL}/api/route?fromLat=${lat}&fromLng=${lng}&toLat=${h.latitude}&toLng=${h.longitude}`)
               .then((r) => r.json())
               .then((d) => {
-                if (d.distance_metres) setHospitalRoute({ distance_metres: d.distance_metres, duration_seconds: d.duration_seconds });
+                if (d.distance_metres) {
+                  setHospitalRoute({ distance_metres: d.distance_metres, duration_seconds: d.duration_seconds });
+                  setRouteCoords(d.coordinates ?? null);
+                }
               })
               .catch(() => {})
               .finally(() => setFetchingRoute(false));
@@ -322,9 +336,22 @@ export default function DriverDashboard() {
     } catch (_) {}
   }
 
-  function handleNavigate(hospital: Hospital) {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${hospital.latitude},${hospital.longitude}&travelmode=driving`;
-    Linking.openURL(url).catch(() => Alert.alert('Error', 'Could not open maps.'));
+  function handleNavigate() {
+    if (!routeCoords) {
+      Alert.alert('Route unavailable', 'Road route is still loading. Please try again in a moment.');
+      return;
+    }
+    const latlngs = routeCoords.map((c) => [c[1], c[0]]);
+    webViewRef.current?.injectJavaScript(`drawRoute(${JSON.stringify(latlngs)}); true;`);
+    setSelectedHospital(null);
+    setIsNavigating(true);
+  }
+
+  function handleStopNavigation() {
+    webViewRef.current?.injectJavaScript('clearRoute(); true;');
+    setIsNavigating(false);
+    setRouteCoords(null);
+    setHospitalRoute(null);
   }
 
   if (loading) {
@@ -391,6 +418,14 @@ export default function DriverDashboard() {
       >
         <Ionicons name="locate" size={22} color="#1D3557" />
       </TouchableOpacity>
+
+      {/* Stop navigation button */}
+      {isNavigating && (
+        <TouchableOpacity style={styles.stopNavBtn} onPress={handleStopNavigation}>
+          <Ionicons name="close-circle" size={18} color="#fff" />
+          <Text style={styles.stopNavText}>Stop Navigation</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Hospital list button */}
       {hospitals.length > 0 && (
@@ -479,7 +514,7 @@ export default function DriverDashboard() {
                 </Text>
               )}
             </View>
-            <TouchableOpacity style={styles.navigateBtn} onPress={() => handleNavigate(selectedHospital)}>
+            <TouchableOpacity style={[styles.navigateBtn, !routeCoords && { opacity: 0.6 }]} onPress={handleNavigate}>
               <Ionicons name="navigate" size={22} color="#fff" />
               <Text style={styles.navigateBtnText}>Navigate</Text>
             </TouchableOpacity>
@@ -511,7 +546,7 @@ export default function DriverDashboard() {
                   <Text style={styles.listName}>{h.name}</Text>
                   <Text style={styles.listDist}>{label} away</Text>
                 </View>
-                <TouchableOpacity onPress={() => handleNavigate(h)}>
+                <TouchableOpacity onPress={() => { setShowList(false); setSelectedHospital(h); }}>
                   <Ionicons name="navigate" size={22} color="#2DC653" />
                 </TouchableOpacity>
               </TouchableOpacity>
@@ -677,6 +712,13 @@ const styles = StyleSheet.create({
   sosNavigateText: { color: '#fff', fontSize: 17, fontWeight: '700' },
   sosDismissBtn: { paddingVertical: 10 },
   sosDismissText: { fontSize: 15, color: '#ADB5BD', fontWeight: '600' },
+  stopNavBtn: {
+    position: 'absolute', bottom: 32, left: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#E63946', paddingHorizontal: 16, paddingVertical: 12,
+    borderRadius: 24, shadowColor: '#E63946', shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
+  },
+  stopNavText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   listBtn: {
     position: 'absolute', bottom: 90, right: 16, backgroundColor: '#fff',
     width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center',
