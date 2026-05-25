@@ -123,19 +123,38 @@ export default function DriverDashboard() {
 
   const fetchHospitals = useCallback(async (lat: number, lng: number) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/hospitals/nearby?lat=${lat}&lng=${lng}`);
-      if (!response.ok) throw new Error(`Server error ${response.status}`);
-      const data = await response.json();
+      const offset = 0.135; // ~15km in degrees
+      const viewbox = `${lng - offset},${lat + offset},${lng + offset},${lat - offset}`;
+      const url = `https://nominatim.openstreetmap.org/search?amenity=hospital&format=json&limit=50&viewbox=${viewbox}&bounded=1&addressdetails=0`;
 
-      const list: Hospital[] = (data.hospitals as any[])
-        .map((h) => {
-          const dLat = ((h.latitude - lat) * Math.PI) / 180;
-          const dLng = ((h.longitude - lng) * Math.PI) / 180;
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'AmbulanceTracker/1.0',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) throw new Error(`Nominatim ${response.status}`);
+      const data = await response.json() as any[];
+
+      const list: Hospital[] = data
+        .filter((el) => el.lat && el.lon)
+        .map((el) => {
+          const hLat = parseFloat(el.lat);
+          const hLng = parseFloat(el.lon);
+          const dLat = ((hLat - lat) * Math.PI) / 180;
+          const dLng = ((hLng - lng) * Math.PI) / 180;
           const a =
             Math.sin(dLat / 2) ** 2 +
-            Math.cos((lat * Math.PI) / 180) * Math.cos((h.latitude * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+            Math.cos((lat * Math.PI) / 180) * Math.cos((hLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
           const dist = Math.round(6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-          return { ...h, distance_metres: dist };
+          return {
+            id: String(el.place_id),
+            name: el.name || el.display_name.split(',')[0] || 'Hospital',
+            latitude: hLat,
+            longitude: hLng,
+            distance_metres: dist,
+          };
         })
         .sort((a, b) => a.distance_metres - b.distance_metres);
 
@@ -143,7 +162,7 @@ export default function DriverDashboard() {
       hospitalsRef.current = list;
       injectHospitals(list);
     } catch (err: any) {
-      Alert.alert('Network Error', 'Could not load nearby hospitals. Check your connection.');
+      Alert.alert('Error', 'Could not load nearby hospitals. Check your internet connection.');
     }
   }, [injectHospitals]);
 
