@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AmbulanceAPI } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { StorageService } from '../../services/storage';
-import { OSM_TILE_URL } from '../../constants/config';
+import { OSM_TILE_URL, API_BASE_URL } from '../../constants/config';
 import type {
   Ambulance,
   AmbulanceLocationUpdate,
@@ -89,6 +89,15 @@ const getMapHTML = (tileUrl: string) => `
 
   function panToUser() {
     if (userMarker) map.setView(userMarker.getLatLng(), 14);
+  }
+
+  var routeLayer = null;
+  function drawRoute(latlngs) {
+    if (routeLayer) map.removeLayer(routeLayer);
+    routeLayer = L.polyline(latlngs, { color: '#457B9D', weight: 5, opacity: 0.85, dashArray: '10, 8' }).addTo(map);
+  }
+  function clearRoute() {
+    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
   }
 </script>
 </body>
@@ -219,9 +228,17 @@ export default function UserMapScreen() {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'markerClick') {
         const amb = ambulancesRef.current.get(data.id);
-        if (amb) setSelectedAmbulance(amb);
+        if (amb) {
+          setSelectedAmbulance(amb);
+          if (amb.latitude && amb.longitude) fetchAndDrawRoute(amb.latitude, amb.longitude);
+        }
       }
     } catch (_) {}
+  }
+
+  function dismissAmbulance() {
+    setSelectedAmbulance(null);
+    webViewRef.current?.injectJavaScript('clearRoute(); true;');
   }
 
   function handleSOS() {
@@ -269,6 +286,28 @@ export default function UserMapScreen() {
   function formatDistance(meters: number): string {
     if (meters < 1000) return `${meters} m`;
     return `${(meters / 1000).toFixed(1)} km`;
+  }
+
+  function formatETA(meters: number): string {
+    const minutes = Math.ceil(meters / 666.67); // 40 km/h average
+    if (minutes < 1) return '< 1 min';
+    return `~${minutes} min`;
+  }
+
+  function minutesSince(isoString: string): number {
+    return (Date.now() - new Date(isoString).getTime()) / 60000;
+  }
+
+  async function fetchAndDrawRoute(toLat: number, toLng: number) {
+    if (!locationRef.current) return;
+    const { lat, lng } = locationRef.current;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/route?fromLat=${lat}&fromLng=${lng}&toLat=${toLat}&toLng=${toLng}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const latlngs = data.coordinates.map((c: number[]) => [c[1], c[0]]);
+      webViewRef.current?.injectJavaScript(`drawRoute(${JSON.stringify(latlngs)}); true;`);
+    } catch (_) {}
   }
 
   const ambulanceList = Array.from(ambulances.values()).filter((a) => a.latitude !== 0 && a.longitude !== 0);
@@ -332,8 +371,8 @@ export default function UserMapScreen() {
         </View>
       )}
 
-      <Modal visible={!!selectedAmbulance} transparent animationType="slide" onRequestClose={() => setSelectedAmbulance(null)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedAmbulance(null)} />
+      <Modal visible={!!selectedAmbulance} transparent animationType="slide" onRequestClose={dismissAmbulance}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={dismissAmbulance} />
         {selectedAmbulance && (
           <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
@@ -345,14 +384,26 @@ export default function UserMapScreen() {
                 <Text style={styles.sheetName}>{selectedAmbulance.name}</Text>
                 <Text style={styles.sheetVehicle}>{selectedAmbulance.vehicle_number}</Text>
               </View>
-              <TouchableOpacity onPress={() => setSelectedAmbulance(null)}>
+              <TouchableOpacity onPress={dismissAmbulance}>
                 <Ionicons name="close-circle" size={28} color="#ADB5BD" />
               </TouchableOpacity>
             </View>
+
             <View style={styles.sheetRow}>
               <Ionicons name="navigate" size={16} color="#457B9D" />
               <Text style={styles.sheetDetail}>{formatDistance(selectedAmbulance.distance_meters)} away</Text>
+              <Text style={styles.etaText}>{formatETA(selectedAmbulance.distance_meters)}</Text>
             </View>
+
+            {selectedAmbulance.last_seen && minutesSince(selectedAmbulance.last_seen) > 2 && (
+              <View style={styles.inactiveRow}>
+                <Ionicons name="warning-outline" size={14} color="#F59E0B" />
+                <Text style={styles.inactiveText}>
+                  Last updated {Math.floor(minutesSince(selectedAmbulance.last_seen))} min ago — may be unavailable
+                </Text>
+              </View>
+            )}
+
             <View style={styles.sheetRow}>
               <Ionicons name="call" size={16} color="#457B9D" />
               <Text style={styles.sheetDetail}>{selectedAmbulance.phone}</Text>
@@ -421,6 +472,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#2DC653', borderRadius: 14, paddingVertical: 16, marginTop: 12, gap: 10,
   },
   callButtonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  etaText: { marginLeft: 'auto' as any, fontSize: 13, fontWeight: '700', color: '#2DC653' },
+  inactiveRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#FFFBEB', borderRadius: 8, padding: 8, marginBottom: 10,
+  },
+  inactiveText: { flex: 1, fontSize: 12, color: '#92400E' },
   sosBtn: {
     position: 'absolute', bottom: 32, left: 16,
     backgroundColor: '#E63946', width: 64, height: 64, borderRadius: 32,

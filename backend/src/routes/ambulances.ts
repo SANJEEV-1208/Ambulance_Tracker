@@ -50,4 +50,28 @@ router.get('/nearby', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/ambulances/active — all on-duty drivers (used by admin dashboard)
+router.get('/active', async (_req: Request, res: Response) => {
+  try {
+    const active = await pool.query(
+      `SELECT id, name, phone, vehicle_number,
+         ST_Y(location::geometry) AS latitude,
+         ST_X(location::geometry) AS longitude,
+         last_seen
+       FROM drivers
+       WHERE is_on_duty = true AND location IS NOT NULL
+       ORDER BY last_seen DESC`
+    );
+    const total = await pool.query('SELECT COUNT(*) FROM drivers');
+    res.json({
+      ambulances: active.rows,
+      on_duty_count: active.rows.length,
+      total_drivers: parseInt(total.rows[0].count),
+    });
+  } catch (err) {
+    console.error('Active ambulances error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
