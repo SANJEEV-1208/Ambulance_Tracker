@@ -9,7 +9,7 @@ router.get('/', (_req: Request, res: Response) => {
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AmbulanceTracker — Admin</title>
+  <title>RESQUBE — Admin</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
@@ -63,7 +63,7 @@ router.get('/', (_req: Request, res: Response) => {
 <body>
 <header>
   <span class="logo">🚑 ADMIN</span>
-  <h1>AmbulanceTracker Dashboard</h1>
+  <h1>RESQUBE Dashboard</h1>
   <span class="live-dot"></span>
   <span class="live-label">LIVE</span>
 </header>

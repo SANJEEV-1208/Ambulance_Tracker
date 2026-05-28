@@ -2,9 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppRole, Driver } from '../types';
 
 const KEYS = {
-  ROLE: '@ambulance_tracker/role',
-  TOKEN: '@ambulance_tracker/token',
-  DRIVER: '@ambulance_tracker/driver',
+  ROLE: '@resqube/role',
+  TOKEN: '@resqube/token',
+  DRIVER: '@resqube/driver',
 } as const;
 
 export const StorageService = {

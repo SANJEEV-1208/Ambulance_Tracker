@@ -21,7 +21,7 @@ router.get('/nearby', async (req: Request, res: Response) => {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'AmbulanceTracker/1.0 (resume-project)',
+        'User-Agent': 'RESQUBE/1.0 (resume-project)',
         'Accept': 'application/json',
       },
     });

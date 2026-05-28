@@ -19,7 +19,7 @@ router.get('/', async (req: Request, res: Response) => {
 
   try {
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'AmbulanceTracker/1.0' },
+      headers: { 'User-Agent': 'RESQUBE/1.0' },
     });
     if (!response.ok) throw new Error(`OSRM ${response.status}`);
 

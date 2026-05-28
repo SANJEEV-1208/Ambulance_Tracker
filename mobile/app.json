@@ -1,20 +1,20 @@
 {
   "expo": {
-    "name": "AmbulanceTracker",
-    "slug": "ambulance-tracker",
+    "name": "RESQUBE",
+    "slug": "resqube",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "scheme": "ambulancetracker",
+    "scheme": "resqube",
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#E63946"
+      "backgroundColor": "#fce8e8"
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.ambulancetracker.app",
+      "bundleIdentifier": "com.resqube.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Your location is used to show nearby ambulances and to share your position when on duty.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Your location is shared continuously while you are on duty as a driver."
@@ -23,9 +23,9 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#E63946"
+        "backgroundColor": "#fce8e8"
       },
-      "package": "com.ambulancetracker.app",
+      "package": "com.resqube.app",
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
@@ -40,7 +40,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow AmbulanceTracker to use your location."
+          "locationAlwaysAndWhenInUsePermission": "Allow RESQUBE to use your location."
         }
       ],
       "expo-font"
