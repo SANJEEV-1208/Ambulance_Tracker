@@ -3,7 +3,8 @@
 Real-time emergency response system — ambulance dispatch, live GPS tracking, in-app navigation, and SOS alerts.
 
 **GitHub:** https://github.com/SANJEEV-1208/Ambulance_Tracker  
-**Live Admin Dashboard:** https://ambulance-tracker-wxpb.onrender.com/admin
+**Live Admin Dashboard:** https://ambulance-tracker-wxpb.onrender.com/admin  
+**Download APK (Android):** https://expo.dev/artifacts/eas/WTtuwyWAu8CGPtcHNVRjc.apk
 
 ---
 
