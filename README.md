@@ -1,73 +1,65 @@
-# RESQUBE
+# RESQUBE — Real-Time Emergency Response App
 
-Real-time emergency response system — ambulance dispatch, live GPS tracking, in-app navigation, and SOS alerts.
+RESQUBE is an Android app that connects emergency responders with nearby ambulance drivers in real time. Built as my final year project, it handles live GPS tracking, SOS alerts, in-app navigation, and nearby hospital discovery — all without Google Maps or any paid APIs.
 
-**GitHub:** https://github.com/SANJEEV-1208/Ambulance_Tracker  
 **Live Admin Dashboard:** https://ambulance-tracker-wxpb.onrender.com/admin  
-**Download APK (Android):** https://expo.dev/artifacts/eas/WTtuwyWAu8CGPtcHNVRjc.apk
+**Download APK:** https://expo.dev/artifacts/eas/WTtuwyWAu8CGPtcHNVRjc.apk
+
+> Backend runs on Render's free tier — first load might take ~15 seconds to wake up.
 
 ---
 
-## Try It (No Install Required)
+## Demo Videos
 
-Open the **Admin Dashboard** in any browser:  
-**https://ambulance-tracker-wxpb.onrender.com/admin**
+**Ambulance Driver side** — logging in, going on duty, receiving SOS alerts, navigating to the user  
+[Watch on Google Drive](https://drive.google.com/file/d/1mBaN4-p96A9pnOZmhwZZ7Ft1gE-_k5rL/view?usp=drivesdk)
 
-- See all on-duty ambulances on a live map
-- Real-time location updates as drivers move
-- On-duty count and last-seen timestamps
-
-> The backend is hosted on Render's free tier — if the page loads slowly the first time, wait ~15 seconds for it to wake up.
+**Emergency Responder side** — seeing nearby ambulances, sending SOS, getting notified when a driver accepts  
+[Watch on Google Drive](https://drive.google.com/file/d/1nUy6MGeutNpUmlAf-pqXvXQ5_EqaaaV6/view?usp=drivesdk)
 
 ---
 
-## Features
+## What it does
 
-- **Live GPS tracking** — Drivers broadcast location every 5 seconds via WebSocket; emergency responders see markers update in real time
-- **Nearby hospitals** — Driver dashboard fetches hospitals from OpenStreetMap (Nominatim) for any location worldwide, sorted by road distance
-- **In-app navigation** — OSRM calculates the actual road route; polyline drawn on the Leaflet map (no Google Maps dependency)
-- **Accurate ETA** — Road distance and driving duration from OSRM instead of straight-line Haversine
-- **SOS alerts** — Emergency responders can broadcast their GPS coordinates; all on-duty drivers receive a full-screen alert
-- **Admin dashboard** — Web-based live map with real-time ambulance positions and driver stats
+There are two sides to the app:
+
+**Emergency Responder (no login needed)**
+- Opens the app and sees all on-duty ambulances on a live map
+- Tap any ambulance marker to call the driver directly
+- Hit the SOS button to broadcast your location to all nearby drivers
+- Once a driver accepts, you get their name, phone number, and vehicle number
+
+**Ambulance Driver (login required)**
+- Toggle on/off duty — location starts broadcasting every 5 seconds via WebSocket
+- Receives SOS alerts as a full-screen popup with Accept/Deny options
+- First driver to accept gets the job; everyone else's popup is dismissed automatically
+- In-app navigation draws the road route to the patient using OSRM
+- Can search nearby hospitals sorted by road distance
+
+**Admin Dashboard (web)**
+- Live map showing all on-duty ambulances with real-time location updates
+- SOS alerts show as pulsing red markers with a toast notification
+- Sidebar lists active drivers and incoming SOS events
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Mobile | Expo (React Native), TypeScript, EAS Build |
-| Maps | Leaflet.js inside WebView (OpenStreetMap tiles, no API key) |
-| Routing | OSRM (Open Source Routing Machine) — free, no key |
-| Hospital data | Nominatim (OpenStreetMap) — called on-device |
-| Real-time | Socket.io v4 (WebSockets) |
-| Backend | Node.js, Express, TypeScript |
-| Database | PostgreSQL + PostGIS (spatial queries) |
+| | |
+|---|---|
+| Mobile | React Native (Expo), TypeScript, EAS Build |
+| Maps | Leaflet.js in WebView — OpenStreetMap tiles, no API key |
+| Routing | OSRM — free road routing, no key needed |
+| Hospital search | Nominatim (OpenStreetMap) |
+| Real-time | Socket.io v4 |
+| Backend | Node.js + Express + TypeScript |
+| Database | PostgreSQL with PostGIS for spatial queries |
 | Auth | JWT + bcrypt |
-| Hosting | Render (backend) + Supabase (database) |
+| Hosting | Render (backend), Supabase (database) |
 
 ---
 
-## Architecture
-
-```
-mobile/        Expo React Native app (Android APK via EAS Build)
-backend/       Express + Socket.io REST API + WebSocket server
-```
-
-**Two roles:**
-
-- **Emergency Responder** — No login. Opens app → sees nearby on-duty ambulances on a map → taps marker → calls driver or sends SOS alert
-- **Ambulance Driver** — Registers and logs in. Toggles On Duty. While on duty, GPS is sent to the server every 5 s via WebSocket. Can see nearby hospitals, get road directions, and receive SOS alerts
-
----
-
-## Local Setup
-
-### Prerequisites
-- Node.js ≥ 18
-- PostgreSQL ≥ 14 with PostGIS extension
-- Expo Go app on a physical Android/iOS device (for local testing)
+## Running locally
 
 ### 1. Database
 
@@ -82,10 +74,9 @@ psql -U postgres ambulance_tracker -f backend/src/db/schema.sql
 ```bash
 cd backend
 cp .env.example .env
-# Set DATABASE_URL and JWT_SECRET in .env
+# fill in DATABASE_URL and JWT_SECRET
 npm install
 npm run dev
-# Server starts on port 3000
 ```
 
 ### 3. Mobile
@@ -94,41 +85,34 @@ npm run dev
 cd mobile
 npm install
 npx expo start
-# Scan QR code with Expo Go on your phone
 ```
 
-Update `mobile/constants/config.ts` with your machine's local IP address before scanning.
+Update `mobile/constants/config.ts` with your local machine's IP before scanning the QR code with Expo Go.
 
 ---
 
-## API Reference
+## API
 
-### Auth
-| Method | Endpoint | Body |
-|--------|----------|------|
+| Method | Endpoint | Notes |
+|--------|----------|-------|
 | POST | `/api/auth/register` | `{name, email, phone, password, vehicle_number}` |
 | POST | `/api/auth/login` | `{email, password}` |
+| GET | `/api/ambulances/nearby` | `?lat=&lng=&radius=` (metres) |
+| GET | `/api/ambulances/active` | all on-duty drivers |
+| GET | `/api/route` | `?fromLat=&fromLng=&toLat=&toLng=` |
+| GET | `/api/hospitals/nearby` | `?lat=&lng=` |
 
-### Ambulances
-| Method | Endpoint | Params |
-|--------|----------|--------|
-| GET | `/api/ambulances/nearby` | `lat, lng, radius` (metres) |
-| GET | `/api/ambulances/active` | — |
+## WebSocket Events
 
-### Route
-| Method | Endpoint | Params |
-|--------|----------|--------|
-| GET | `/api/route` | `fromLat, fromLng, toLat, toLng` |
-
-### WebSocket Events
-
-| Direction | Event | Payload |
-|-----------|-------|---------|
-| Client → Server | `driver:on_duty` | — |
-| Client → Server | `driver:off_duty` | — |
-| Client → Server | `driver:update_location` | `{latitude, longitude}` |
-| Client → Server | `user:sos` | `{latitude, longitude}` |
-| Server → All | `ambulance:location_updated` | `{driverId, latitude, longitude, timestamp}` |
+| Who sends it | Event | Payload |
+|---|---|---|
+| Driver → Server | `driver:on_duty` | — |
+| Driver → Server | `driver:off_duty` | — |
+| Driver → Server | `driver:update_location` | `{latitude, longitude}` |
+| User → Server | `user:sos` | `{latitude, longitude}` |
+| Driver → Server | `sos:accept` | `{sosId}` |
+| Server → All | `ambulance:location_updated` | `{driverId, latitude, longitude}` |
 | Server → All | `ambulance:on_duty` | `{driverId, name, phone, vehicle_number}` |
 | Server → All | `ambulance:off_duty` | `{driverId}` |
-| Server → All | `sos:alert` | `{latitude, longitude, timestamp}` |
+| Server → All | `sos:alert` | `{sosId, latitude, longitude, timestamp}` |
+| Server → All | `sos:accepted` | `{sosId, driverId, driver}` |
